@@ -1,0 +1,8 @@
+node_modules/
+.next/
+qa/
+.functions-build/
+.wrangler/
+.DS_Store
+.dev.vars
+.env*
