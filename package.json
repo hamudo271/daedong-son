@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "extract": "/usr/bin/python3 tools/extract.py",
-    "build": "npm run extract && next build && node scripts/postbuild.mjs"
+    "build": "if [ -d ../daedong-renewal ]; then npm run extract; fi && next build && node scripts/postbuild.mjs"
   },
   "dependencies": {
     "next": "16.4.1",

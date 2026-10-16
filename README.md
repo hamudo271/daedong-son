@@ -14,4 +14,6 @@
     npx wrangler@4 pages dev out --port 8789
     npx wrangler@4 pages deploy out --project-name daedong-next --branch main --commit-dirty=true
 
+GitHub(hamudo271/daedong-son) main에 푸시하면 .github/workflows/deploy.yml이 빌드 후 daedong-next Pages로 자동 배포한다. 저장소 시크릿 CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID가 필요하다. 원본 ../daedong-renewal이 없으면 build는 extract를 건너뛰고 커밋된 content/와 public/assets를 쓴다.
+
 기존 daedong-renewal Worker와 daedong-cms D1은 건드리지 않는다. 새 배포는 daedong-next Pages와 daedong-next-cms D1을 사용한다.
