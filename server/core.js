@@ -113,9 +113,8 @@ async function checkPassword(env, pw) {
   if (!env.ADMIN_PASSWORD) return null; // 아직 비밀번호가 설정되지 않음
   return same(await sha256(pw), await sha256(env.ADMIN_PASSWORD));
 }
-// Railway(Node)에서는 프록시가 X-Real-IP / X-Forwarded-For 로 실제 접속 IP를 넘긴다
-const clientIP = (req) =>
-  req.headers.get('CF-Connecting-IP') || req.headers.get('X-Real-IP') || (req.headers.get('X-Forwarded-For') || '').split(',')[0].trim() || 'local';
+// Railway(Node)에서는 server/node/main.mjs가 신뢰할 수 있는 접속 IP로 CF-Connecting-IP를 다시 채운다
+const clientIP = (req) => req.headers.get('CF-Connecting-IP') || 'local';
 
 /* ---------------- 유튜브 ---------------- */
 export function youtubeId(input) {
