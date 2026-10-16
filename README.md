@@ -14,6 +14,14 @@
     npx wrangler@4 pages dev out --port 8789
     npx wrangler@4 pages deploy out --project-name daedong-next --branch main --commit-dirty=true
 
-GitHub(hamudo271/daedong-son) main에 푸시하면 .github/workflows/deploy.yml이 빌드 후 daedong-next Pages로 자동 배포한다. 저장소 시크릿 CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID가 필요하다. 원본 ../daedong-renewal이 없으면 build는 extract를 건너뛰고 커밋된 content/와 public/assets를 쓴다.
-
 기존 daedong-renewal Worker와 daedong-cms D1은 건드리지 않는다. 새 배포는 daedong-next Pages와 daedong-next-cms D1을 사용한다.
+
+## Railway (현재 운영)
+
+GitHub(hamudo271/daedong-son) main에 푸시하면 Railway가 자동으로 빌드·배포한다.
+
+- 빌드: npm run build → out/(정적) + dist/server.mjs(서버). 원본 ../daedong-renewal이 없으면 extract는 건너뛴다.
+- 실행: npm start → server/node/main.mjs. functions/[[path]].js와 server/core.js를 그대로 쓰고, D1 대신 SQLite 파일, HTMLRewriter 대신 lol-html wasm을 쓴다.
+- 데이터: Railway 볼륨(/data)의 cms.db. 처음 켤 때 seed/posts.json(공개 사례 7건)을 넣는다. 볼륨이 없으면 배포할 때마다 글·사진이 사라진다.
+- 변수: ADMIN_PASSWORD(관리자 비밀번호). 관리자 화면에서 비밀번호를 바꾸면 그 값이 우선한다.
+- 로컬: npm run build:server && ADMIN_PASSWORD=... npm start → http://localhost:8080 (데이터는 .data/cms.db)

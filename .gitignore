@@ -7,3 +7,5 @@ qa/
 .DS_Store
 .dev.vars
 .env*
+dist/
+.data/

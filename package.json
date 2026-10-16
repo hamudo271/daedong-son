@@ -3,14 +3,21 @@
   "private": true,
   "scripts": {
     "extract": "/usr/bin/python3 tools/extract.py",
-    "build": "if [ -d ../daedong-renewal ]; then npm run extract; fi && next build && node scripts/postbuild.mjs"
+    "build": "if [ -d ../daedong-renewal ]; then npm run extract; fi && next build && node scripts/postbuild.mjs && npm run build:server",
+    "build:server": "esbuild server/node/main.mjs --bundle --platform=node --format=esm --target=node22 --packages=external --jsx=automatic --outfile=dist/server.mjs",
+    "start": "node dist/server.mjs"
   },
   "dependencies": {
+    "esbuild": "^0.28.2",
+    "html-rewriter-wasm": "^0.4.1",
     "next": "16.4.1",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
     "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": "24.x"
   }
 }
