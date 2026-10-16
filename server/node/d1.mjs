@@ -49,6 +49,7 @@ export function openD1(file) {
   db.exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;');
   return {
     raw: db,
+    close: () => db.close(),
     prepare: (sql) => new Statement(db, sql),
     async batch(stmts) {
       db.exec('BEGIN');

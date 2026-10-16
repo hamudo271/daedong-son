@@ -1,6 +1,7 @@
 /**
  * Railway(Node) 서버: Cloudflare Pages Functions(functions/[[path]].js)를 그대로 돌린다.
- * - D1 → node:sqlite 파일(Railway 볼륨). 처음 켤 때 seed/posts.json의 공개 사례를 넣는다.
+ * - D1 → DATABASE_URL이 있으면 PostgreSQL(Railway), 없으면 node:sqlite 파일(로컬 개발).
+ *   처음 켤 때 seed/posts.json의 공개 사례를 넣는다.
  * - HTMLRewriter → lol-html wasm, env.ASSETS·ctx.next → out/ 정적 파일
  */
 import http from 'node:http';
@@ -9,6 +10,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { HTMLRewriter } from './html-rewriter.mjs';
 import { openD1 } from './d1.mjs';
+import { openPg } from './pg.mjs';
 import { createStatic, pattern } from './static.mjs';
 import { ensure } from '../core.js';
 import { onRequest } from '../../functions/[[path]].js';
@@ -17,12 +19,13 @@ globalThis.HTMLRewriter = HTMLRewriter;
 
 const ROOT = process.cwd();
 const OUT = path.join(ROOT, 'out');
-const volume = process.env.RAILWAY_VOLUME_MOUNT_PATH;
-const DB_PATH = process.env.DB_PATH || (volume ? path.join(volume, 'cms.db') : path.join(ROOT, '.data', 'cms.db'));
-if (process.env.RAILWAY_ENVIRONMENT && !volume && !process.env.DB_PATH)
-  console.warn('[경고] Railway 볼륨이 없습니다. 다시 배포하면 CMS 글·사진이 사라집니다. 볼륨을 /data 에 연결하세요.');
+const DATABASE_URL = process.env.DATABASE_URL;
+const DB_PATH = process.env.DB_PATH || path.join(ROOT, '.data', 'cms.db');
+if (process.env.RAILWAY_ENVIRONMENT && !DATABASE_URL)
+  console.warn('[경고] DATABASE_URL이 없습니다. 임시 파일에 저장하므로 다시 배포하면 CMS 글·사진이 사라집니다. Postgres를 연결하세요.');
 
-const db = openD1(DB_PATH);
+const db = DATABASE_URL ? await openPg(DATABASE_URL) : openD1(DB_PATH);
+const DB_LABEL = DATABASE_URL ? `postgres ${new URL(DATABASE_URL).host}` : DB_PATH;
 await ensure(db);
 await seed();
 
@@ -45,6 +48,7 @@ async function seed() {
         return db.prepare(`INSERT INTO posts(${cols.join(',')}) VALUES(${cols.map(() => '?').join(',')})`).bind(...cols.map((c) => r[c]));
       }),
     );
+    await db.syncIds?.();
     console.log(`seed: 사례 ${rows.length}건을 넣었습니다.`);
   }
   await db.prepare("INSERT INTO settings(k,v) VALUES('seeded','1') ON CONFLICT(k) DO NOTHING").run();
@@ -135,7 +139,7 @@ const server = http.createServer((req, res) => {
 });
 
 const PORT = Number(process.env.PORT) || 8080;
-server.listen(PORT, () => console.log(`daedong server on :${PORT} (db: ${DB_PATH})`));
-const stop = () => server.close(() => (db.raw.close(), process.exit(0)));
+server.listen(PORT, () => console.log(`daedong server on :${PORT} (db: ${DB_LABEL})`));
+const stop = () => server.close(async () => (await db.close(), process.exit(0)));
 process.on('SIGTERM', stop);
 process.on('SIGINT', stop);

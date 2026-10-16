@@ -21,7 +21,7 @@
 GitHub(hamudo271/daedong-son) main에 푸시하면 Railway가 자동으로 빌드·배포한다.
 
 - 빌드: npm run build → out/(정적) + dist/server.mjs(서버). 원본 ../daedong-renewal이 없으면 extract는 건너뛴다.
-- 실행: npm start → server/node/main.mjs. functions/[[path]].js와 server/core.js를 그대로 쓰고, D1 대신 SQLite 파일, HTMLRewriter 대신 lol-html wasm을 쓴다.
-- 데이터: Railway 볼륨(/data)의 cms.db. 처음 켤 때 seed/posts.json(공개 사례 7건)을 넣는다. 볼륨이 없으면 배포할 때마다 글·사진이 사라진다.
-- 변수: ADMIN_PASSWORD(관리자 비밀번호). 관리자 화면에서 비밀번호를 바꾸면 그 값이 우선한다.
-- 로컬: npm run build:server && ADMIN_PASSWORD=... npm start → http://localhost:8080 (데이터는 .data/cms.db)
+- 실행: npm start → server/node/main.mjs. functions/[[path]].js와 server/core.js를 그대로 쓰고, D1 대신 PostgreSQL(server/node/pg.mjs가 SQLite 문법을 바꿔 실행), HTMLRewriter 대신 lol-html wasm을 쓴다.
+- 데이터: Railway Postgres(daedong-son의 DATABASE_URL 변수로 연결). 처음 켤 때 seed/posts.json(공개 사례 7건)을 넣는다. DATABASE_URL이 없으면 임시 SQLite 파일이라 배포할 때마다 글·사진이 사라진다.
+- 변수: ADMIN_PASSWORD(관리자 비밀번호), DATABASE_URL(Postgres). 관리자 화면에서 비밀번호를 바꾸면 그 값이 우선한다.
+- 로컬: npm run build:server && ADMIN_PASSWORD=... npm start → http://localhost:8080 (DATABASE_URL을 주면 Postgres, 없으면 .data/cms.db)
