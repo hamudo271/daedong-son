@@ -1,0 +1,8 @@
+name = "daedong-next"
+compatibility_date = "2026-10-01"
+pages_build_output_dir = "./out"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "daedong-next-cms"
+database_id = "feb9012a-fcfa-4f07-afcd-a781c716e5a6"

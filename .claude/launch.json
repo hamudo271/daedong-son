@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "daedong-pages",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["wrangler@4", "pages", "dev", "out", "--port", "8789"],
+      "port": 8789
+    }
+  ]
+}

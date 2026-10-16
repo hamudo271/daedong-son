@@ -1,0 +1,16 @@
+{
+  "name": "daedong-next",
+  "private": true,
+  "scripts": {
+    "extract": "/usr/bin/python3 tools/extract.py",
+    "build": "npm run extract && next build && node scripts/postbuild.mjs"
+  },
+  "dependencies": {
+    "next": "16.4.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
