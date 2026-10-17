@@ -5,6 +5,7 @@
  * - HTMLRewriter → lol-html wasm, env.ASSETS·ctx.next → out/ 정적 파일
  */
 import http from 'node:http';
+import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
@@ -73,13 +74,33 @@ const COMPRESSIBLE = /^(text\/|application\/(javascript|json|xml|manifest\+json)
 // 클라이언트가 보낸 값은 믿지 않는다: CF-Connecting-IP(로그인 잠금 우회), X-Forwarded-Host(다른 주소로 리다이렉트)
 const UNTRUSTED = new Set(['cf-connecting-ip', 'x-forwarded-host']);
 
+// daedongclaim.com은 Cloudflare 프록시를 거친다 → Railway가 보는 IP는 Cloudflare 서버.
+// 그 IP가 Cloudflare 공식 대역일 때만 CF-Connecting-IP(실제 방문자 IP)를 믿는다. https://www.cloudflare.com/ips
+const CLOUDFLARE = new net.BlockList();
+for (const c of ['173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22', '141.101.64.0/18', '108.162.192.0/18',
+  '190.93.240.0/20', '188.114.96.0/20', '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13', '104.24.0.0/14',
+  '172.64.0.0/13', '131.0.72.0/22']) CLOUDFLARE.addSubnet(c.split('/')[0], +c.split('/')[1], 'ipv4');
+for (const c of ['2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32', '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32'])
+  CLOUDFLARE.addSubnet(c.split('/')[0], +c.split('/')[1], 'ipv6');
+const isCloudflare = (ip) => {
+  const v4 = ip.replace(/^::ffff:/i, '');
+  if (net.isIPv4(v4)) return CLOUDFLARE.check(v4, 'ipv4');
+  return net.isIPv6(ip) && CLOUDFLARE.check(ip, 'ipv6');
+};
+
+/** 로그인 잠금에 쓰는 방문자 IP. Railway 엣지는 X-Real-IP를 실제 접속 IP로 덮어쓴다(없으면 로컬: 소켓 주소) */
+function visitorIP(req) {
+  const edge = String(req.headers['x-real-ip'] || req.socket.remoteAddress || 'local').trim();
+  const cf = String(req.headers['cf-connecting-ip'] || '').trim();
+  return cf && net.isIP(cf) && isCloudflare(edge) ? cf : edge;
+}
+
 function toRequest(req, body) {
   const proto = String(req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim();
   const host = req.headers.host || 'localhost';
   const headers = new Headers();
   for (const [k, v] of Object.entries(req.headers)) if (!UNTRUSTED.has(k)) headers.set(k, Array.isArray(v) ? v.join(', ') : v);
-  // Railway 엣지는 요청마다 X-Real-IP를 실제 접속 IP로 덮어쓴다. 없으면(로컬) 소켓 주소
-  headers.set('cf-connecting-ip', String(req.headers['x-real-ip'] || req.socket.remoteAddress || 'local').trim());
+  headers.set('cf-connecting-ip', visitorIP(req));
   const hasBody = body && req.method !== 'GET' && req.method !== 'HEAD';
   return new Request(`${proto}://${host}${req.url}`, { method: req.method, headers, body: hasBody ? body : undefined });
 }
