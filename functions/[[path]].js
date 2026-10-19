@@ -116,6 +116,50 @@ async function route(ctx, url, p) {
   });
 }
 
+/** RSS 2.0 피드(네이버 서치어드바이저·구글 제출용): 공개된 사례·매거진·뉴스룸 최신 50건 */
+async function rss(db) {
+  await ensure(db);
+  const rows = (
+    await db.prepare("SELECT id, kind, title, summary, body, category, author, published_at, updated_at FROM posts WHERE status='published' ORDER BY published_at DESC, id DESC LIMIT 50").all()
+  ).results.filter((r) => TYPES[r.kind]);
+  // published_at은 한국 날짜(YYYY-MM-DD) → 그날 09:00 KST로 RFC 822 표기
+  const date = (d) => new Date(String(d || '').slice(0, 10) + 'T09:00:00+09:00').toUTCString();
+  const items = rows.map((r) => {
+    const link = SITE.url + '/cases/' + r.id;
+    const desc = (r.summary || plain(r.body)).slice(0, 300);
+    return [
+      '    <item>',
+      `      <title>${esc(r.title)}</title>`,
+      `      <link>${link}</link>`,
+      `      <guid isPermaLink="true">${link}</guid>`,
+      `      <description>${esc(desc)}</description>`,
+      `      <category>${esc(TYPES[r.kind].label)}</category>`,
+      r.category ? `      <category>${esc(r.category)}</category>` : '',
+      `      <dc:creator>${esc(r.author || SITE.name)}</dc:creator>`,
+      `      <pubDate>${date(r.published_at)}</pubDate>`,
+      '    </item>',
+    ].filter(Boolean).join('\n');
+  });
+  const latest = rows.map((r) => r.updated_at || r.published_at).sort().pop();
+  const xml = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">',
+    '  <channel>',
+    `    <title>${esc(SITE.name)} | 손해사정 사례·매거진·뉴스룸</title>`,
+    `    <link>${SITE.url}/</link>`,
+    `    <description>${esc('금융감독원 등록 신체 손해사정사가 전하는 교통사고·후유장해·진단비 손해사정 사례와 보험·보상 이야기')}</description>`,
+    '    <language>ko</language>',
+    `    <atom:link href="${SITE.url}/rss.xml" rel="self" type="application/rss+xml"/>`,
+    `    <image><url>${SITE.url}/assets/img/logo-512.png</url><title>${esc(SITE.name)}</title><link>${SITE.url}/</link></image>`,
+    latest ? `    <lastBuildDate>${new Date(latest.length > 10 ? latest : date(latest)).toUTCString()}</lastBuildDate>` : '',
+    ...items,
+    '  </channel>',
+    '</rss>',
+    '',
+  ].filter(Boolean).join('\n');
+  return new Response(xml, { headers: { 'content-type': 'application/rss+xml; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
+}
+
 /** 검색엔진용 sitemap.xml: 고정 페이지 + 공개된 사례·매거진·뉴스룸 글 */
 async function sitemap(db) {
   await ensure(db);
@@ -145,6 +189,7 @@ export async function onRequest(ctx) {
   if (request.method !== 'GET' && request.method !== 'HEAD') return ctx.next();
   try {
     if (p === '/sitemap.xml') return await sitemap(env.DB);
+    if (p === '/rss.xml') return await rss(env.DB);
     const res = await route(ctx, url, p);
     if (res) return res;
   } catch (e) {

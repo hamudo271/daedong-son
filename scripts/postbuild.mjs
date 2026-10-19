@@ -37,6 +37,10 @@ function seo(html, slug) {
     `<meta name="twitter:card" content="summary_large_image">`,
     `<link rel="icon" href="/favicon.ico" sizes="48x48">`,
     `<link rel="apple-touch-icon" href="/apple-touch-icon.png">`,
+    `<link rel="alternate" type="application/rss+xml" title="${SITE.name} 손해사정 사례·매거진·뉴스룸" href="${ORIGIN}/rss.xml">`,
+    // 검색 등록 소유 확인(구글 서치 콘솔·네이버 서치어드바이저)
+    `<meta name="google-site-verification" content="gZmtUUN-n1NpqwYHF2pL866rKXDnmNKxxj37oAp8d-U">`,
+    `<meta name="naver-site-verification" content="e61cb98d7c864248e465054d18147776ec0a08ad">`,
   ];
   if (slug === 'home' || slug === 'contact') head.push(ldScript(orgLD(ORIGIN)));
   if (!h.includes('</head>')) throw new Error('no </head> in ' + slug);
@@ -64,7 +68,7 @@ for (const [file, slug] of Object.entries(map)) {
 }
 fs.writeFileSync(path.join(out, '_routes.json'), JSON.stringify({
   version: 1,
-  include: ['/', '/index.html', '/cases', '/cases.html', '/cases/*', '/cases-view', '/cases-view.html', '/api/cms/*', '/media/*', '/sitemap.xml'],
+  include: ['/', '/index.html', '/cases', '/cases.html', '/cases/*', '/cases-view', '/cases-view.html', '/api/cms/*', '/media/*', '/sitemap.xml', '/rss.xml'],
   exclude: ['/assets/*', '/admin/*', '/_next/static/*'],
 }, null, 2) + '\n');
 fs.writeFileSync(path.join(out, '_headers'), [
@@ -82,4 +86,4 @@ fs.writeFileSync(path.join(out, '_headers'), [
   '  X-Robots-Tag: noindex, nofollow',
   '',
 ].join('\n'));
-fs.writeFileSync(path.join(out, 'robots.txt'), ['User-agent: *', 'Allow: /', 'Disallow: /api/', '', `Sitemap: ${ORIGIN}/sitemap.xml`, ''].join('\n'));
+fs.writeFileSync(path.join(out, 'robots.txt'), ['User-agent: *', 'Allow: /', 'Disallow: /api/', '', `Sitemap: ${ORIGIN}/sitemap.xml`, `Sitemap: ${ORIGIN}/rss.xml`, ''].join('\n'));
