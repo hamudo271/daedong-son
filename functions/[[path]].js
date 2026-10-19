@@ -1,5 +1,5 @@
 /** Cloudflare Pages Functions: 기존 D1 CMS를 Next 정적 산출물에 결합한다. */
-import { handleApi, serveMedia, listPublic, getPublic, isAdmin, bumpViews, plain, esc, ensure } from '../server/core.js';
+import { handleApi, handleInquiry, serveMedia, listPublic, getPublic, isAdmin, bumpViews, plain, esc, ensure } from '../server/core.js';
 import { SITE, TYPES, ldScript } from '../lib/site.js';
 import { caseTrackHTML, caseListHTML, caseViewHTML, postViewHTML, caseNotFoundHTML } from '../server/render.jsx';
 
@@ -140,6 +140,8 @@ export async function onRequest(ctx) {
   if (p.startsWith('/api/cms/')) return handleApi(request, env, SITE);
   const media = p.match(/^\/media\/(\d+)$/);
   if (media) return serveMedia(env, +media[1]);
+  // 상담 신청: site.js가 모든 페이지의 폼에서 '/'로 POST 한다
+  if (p === '/' && request.method === 'POST') return handleInquiry(request, env);
   if (request.method !== 'GET' && request.method !== 'HEAD') return ctx.next();
   try {
     if (p === '/sitemap.xml') return await sitemap(env.DB);

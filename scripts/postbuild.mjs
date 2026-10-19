@@ -43,6 +43,15 @@ function seo(html, slug) {
   h = h.replace('</head>', head.join('\n') + '\n</head>');
   // 첫 화면 영상(4.5MB)은 인트로가 끝나고 site.js가 재생할 때 내려받는다
   if (slug === 'home') h = h.replace(/(<video class="hero-video")([^>]*?) autoplay([^>]*?) preload="auto"/, '$1$2$3 preload="none"');
+  // 상담 신청 접수 켜기: site.js는 body[data-form="netlify"]일 때만 '/'로 전송한다(시안 단계 안내 대신).
+  // 사람에게는 안 보이는 칸(website)을 넣어 두고, 이 칸을 채운 요청은 봇으로 보고 서버가 버린다
+  h = h
+    .replace(' data-form="preview"', ' data-form="netlify"')
+    .replaceAll(
+      '<input type="hidden" name="form-name" value="contact-form">',
+      '<input type="hidden" name="form-name" value="contact-form"><div aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden"><label>웹사이트<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>',
+    );
+  if (h.includes('name="form-name"') && !h.includes('data-form="netlify"')) throw new Error('form not enabled in ' + slug);
   if (/name="robots" content="noindex/.test(h)) throw new Error('noindex left in ' + slug);
   return h;
 }

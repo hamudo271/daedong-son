@@ -84,6 +84,7 @@
         <div class="logo"><small>${esc(CFG.name)}</small>콘텐츠 관리자</div>
         <nav class="tabs" aria-label="콘텐츠 종류">
           ${KINDS.map((k) => `<button type="button" data-k="${k}" class="${kind === k ? 'on' : ''}">${esc(KIND[k])}</button>`).join('')}
+          <button type="button" data-k="inquiries" class="${kind === 'inquiries' ? 'on' : ''}">상담 접수<b class="cnt" hidden></b></button>
         </nav>
         <div class="sp"></div>
         <a class="btn sm ghost" href="${esc(CFG.home)}" target="_blank" rel="noopener">사이트 보기 ↗</a>
@@ -99,7 +100,15 @@
       route();
     });
     $('[data-act=pw]', app).addEventListener('click', passwordModal);
+    api('inquiries?count=1').then((d) => setCount(d.newCount)).catch(() => {});
     return $('#view', app);
+  }
+  /** 상단 '상담 접수' 탭에 새 접수 건수 표시 */
+  function setCount(n) {
+    const b = $('.tabs .cnt', app);
+    if (!b) return;
+    b.textContent = n > 99 ? '99+' : String(n || 0);
+    b.hidden = !n;
   }
   function go(h) {
     if (dirty && !confirm('저장하지 않은 내용이 있습니다. 이동할까요?')) return;
@@ -531,6 +540,91 @@
   }
 
   /* ---------------- 주소에 따라 화면 고르기 ---------------- */
+  /* ---------------- 상담 접수 ---------------- */
+  const inqState = { page: 1, status: 'new' };
+  const kst = (iso) => new Date(new Date(iso).getTime() + 9 * 3600e3).toISOString().slice(0, 16).replace('T', ' ');
+  const SOURCE = { contact: '상담 문의 페이지', quick: '페이지 하단 신청서' };
+  async function renderInquiries() {
+    const v = shell('inquiries');
+    const st = inqState;
+    v.innerHTML = `
+      <div class="head"><div><h2>상담 접수</h2><p>홈페이지 상담 신청서로 들어온 내용입니다. 상담이 끝나면 개인정보 보호를 위해 삭제해 주세요.</p></div></div>
+      <div class="tools"><select class="inp">
+        <option value="new"${st.status === 'new' ? ' selected' : ''}>새 접수</option>
+        <option value="done"${st.status === 'done' ? ' selected' : ''}>처리 완료</option>
+        <option value=""${st.status === '' ? ' selected' : ''}>전체</option>
+      </select></div>
+      <div class="list"><div class="empty">불러오는 중…</div></div>
+      <div class="pager"></div>`;
+    $('select', v).addEventListener('change', (e) => {
+      st.status = e.target.value;
+      st.page = 1;
+      load();
+    });
+    async function load() {
+      const box = $('.list', v);
+      try {
+        const d = await api(`inquiries?page=${st.page}&status=${st.status}`);
+        setCount(d.newCount);
+        box.innerHTML = d.items.length
+          ? d.items
+              .map(
+                (q) => `
+            <div class="inq" data-id="${q.id}">
+              <div class="inq-top">
+                <span class="badge ${q.status === 'new' ? 'pub' : 'draft'}">${q.status === 'new' ? '새 접수' : '처리 완료'}</span>
+                <b>${esc(q.name)}</b>
+                <a href="tel:${esc(q.phone.replace(/[^\d+]/g, ''))}">${esc(q.phone)}</a>
+                ${q.topic ? `<span class="m">${esc(q.topic)}</span>` : ''}
+                <span class="m">${esc(kst(q.created_at))}${SOURCE[q.source] ? ' · ' + SOURCE[q.source] : ''}</span>
+              </div>
+              <p class="inq-msg">${esc(q.message)}</p>
+              <div class="acts">
+                <button type="button" class="btn sm" data-act="toggle">${q.status === 'new' ? '처리 완료로 표시' : '새 접수로 되돌리기'}</button>
+                <button type="button" class="btn sm danger" data-act="del">삭제</button>
+              </div>
+            </div>`,
+              )
+              .join('')
+          : `<div class="empty"><b>${st.status === 'new' ? '새 상담 접수가 없습니다.' : '상담 접수가 없습니다.'}</b>홈페이지 상담 신청서로 접수되면 여기에 표시됩니다.</div>`;
+        $$('.inq', box).forEach((el) => {
+          const q = d.items.find((x) => String(x.id) === el.dataset.id);
+          $('[data-act=toggle]', el).addEventListener('click', async () => {
+            try {
+              await api(`inquiries/${q.id}`, { method: 'PUT', body: JSON.stringify({ status: q.status === 'new' ? 'done' : 'new' }) });
+              load();
+            } catch (e) {
+              toast(e.message, true);
+            }
+          });
+          $('[data-act=del]', el).addEventListener('click', async () => {
+            if (!confirm(`${q.name}님의 상담 접수를 삭제할까요? 되돌릴 수 없습니다.`)) return;
+            try {
+              await api(`inquiries/${q.id}`, { method: 'DELETE' });
+              toast('삭제했습니다.');
+              load();
+            } catch (e) {
+              toast(e.message, true);
+            }
+          });
+        });
+        const pg = $('.pager', v);
+        pg.innerHTML =
+          d.pages > 1 ? Array.from({ length: d.pages }, (_, i) => `<button type="button" class="${i + 1 === d.page ? 'on' : ''}">${i + 1}</button>`).join('') : '';
+        $$('button', pg).forEach((b, i) =>
+          b.addEventListener('click', () => {
+            st.page = i + 1;
+            load();
+          }),
+        );
+      } catch (e) {
+        if (e.status === 401) return renderLogin();
+        box.innerHTML = `<div class="empty"><b>목록을 불러오지 못했습니다.</b>${esc(e.message)}</div>`;
+      }
+    }
+    load();
+  }
+
   async function route() {
     if (!CFG) CFG = await (await fetch('/api/cms/config')).json();
     if (Array.isArray(CFG.kinds) && CFG.kinds.length) KINDS = CFG.kinds;
@@ -543,6 +637,7 @@
       return renderLogin();
     }
     const [, kind = KINDS[0], id] = (location.hash || `#/${KINDS[0]}`).split('/');
+    if (kind === 'inquiries') return renderInquiries();
     const k = KINDS.includes(kind) ? kind : KINDS[0];
     if (!id) return renderList(k);
     return renderEdit(k, id === 'new' ? null : id);

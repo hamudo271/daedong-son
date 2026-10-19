@@ -135,3 +135,22 @@ textarea.inp { height: auto; min-height: 92px; padding: 12px 14px; line-height: 
   .tools .inp { width: 100%; }
   .rte .bar { top: 108px; }
 }
+
+/* 상담 접수 */
+.tabs .cnt { display: inline-block; min-width: 18px; height: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; background: var(--bad); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; vertical-align: 1px; }
+.tabs .cnt[hidden] { display: none; }
+.inq { padding: 18px 20px; border-top: 1px solid var(--line); }
+.inq:first-child { border-top: 0; }
+.inq-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.inq-top b { font-size: 16px; }
+.inq-top a { color: var(--c); font-weight: 650; text-decoration: none; }
+.inq-top .m { color: var(--mute); font-size: 13px; }
+.inq-msg { margin: 10px 0 14px; white-space: pre-wrap; word-break: break-word; font-size: 14.5px; line-height: 1.65; }
+.inq .acts { display: flex; gap: 6px; justify-content: flex-end; }
+.tabs button { white-space: nowrap; }
+@media (max-width: 900px) {
+  /* 탭이 4개라 좁은 화면에서는 줄바꿈 없이 가로로 밀어 보기 */
+  .top .tabs { overflow-x: auto; scrollbar-width: none; }
+  .top .tabs::-webkit-scrollbar { display: none; }
+  .top .tabs button { flex: 1 0 auto; padding: 0 14px; }
+}

@@ -39,6 +39,19 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS media (id INTEGER PRIMARY KEY AUTOINCREMENT, mime TEXT NOT NULL, bytes BLOB NOT NULL, w INTEGER, h INTEGER, created_at TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS login_fail (ip TEXT PRIMARY KEY, n INTEGER NOT NULL, until INTEGER NOT NULL)`,
+  // 홈페이지 상담 신청. ip_hash는 같은 사람의 연속 접수를 막는 데만 쓰는 되돌릴 수 없는 값(IP 원문은 저장하지 않음)
+  `CREATE TABLE IF NOT EXISTS inquiries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','done')),
+    topic TEXT NOT NULL DEFAULT '',
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    message TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT '',
+    ip_hash TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS inquiries_list ON inquiries(status, id DESC)`,
 ];
 let ready = false;
 export async function ensure(db) {
@@ -342,6 +355,37 @@ export async function handleApi(req, env, site) {
       const rows = (await db.prepare("SELECT DISTINCT category c FROM posts WHERE kind=? AND category<>'' ORDER BY category").bind(kind).all()).results;
       return json(rows.map((r) => r.c));
     }
+    if (path === '/api/cms/inquiries' && req.method === 'GET') {
+      const newCount = (await db.prepare("SELECT COUNT(*) c FROM inquiries WHERE status='new'").first()).c;
+      if (url.searchParams.has('count')) return json({ newCount });
+      const st = url.searchParams.get('status');
+      const where = st === 'new' || st === 'done' ? 'WHERE status=?' : '';
+      const args = where ? [st] : [];
+      const page = Math.max(1, +url.searchParams.get('page') || 1);
+      const per = 20;
+      const total = (await db.prepare(`SELECT COUNT(*) c FROM inquiries ${where}`).bind(...args).first()).c;
+      const items = (
+        await db
+          .prepare(`SELECT id,status,topic,name,phone,message,source,created_at,updated_at FROM inquiries ${where} ORDER BY id DESC LIMIT ? OFFSET ?`)
+          .bind(...args, per, (page - 1) * per)
+          .all()
+      ).results;
+      return json({ items, total, page, pages: Math.max(1, Math.ceil(total / per)), newCount });
+    }
+    const im = path.match(/^\/api\/cms\/inquiries\/(\d+)$/);
+    if (im) {
+      const id = +im[1];
+      if (req.method === 'PUT') {
+        const b = await req.json();
+        const status = b.status === 'done' ? 'done' : 'new';
+        await db.prepare('UPDATE inquiries SET status=?, updated_at=? WHERE id=?').bind(status, nowISO(), id).run();
+        return json({ ok: true, id, status });
+      }
+      if (req.method === 'DELETE') {
+        await db.prepare('DELETE FROM inquiries WHERE id=?').bind(id).run();
+        return json({ ok: true });
+      }
+    }
     if (path === '/api/cms/password' && req.method === 'POST') {
       const b = await req.json();
       const ok = await checkPassword(env, String(b.current || ''));
@@ -400,6 +444,46 @@ export async function getPublic(db, id, { preview = false, kind = 'column' } = {
   const all = (await db.prepare(`SELECT id,title FROM posts WHERE kind=? AND status='published' ORDER BY ${order}`).bind(kind).all()).results;
   const i = all.findIndex((r) => r.id === row.id);
   return { post: row, index: i, total: all.length, newer: i > 0 ? all[i - 1] : null, older: i >= 0 && i < all.length - 1 ? all[i + 1] : null };
+}
+
+/* ---------------- 홈페이지 상담 신청 ---------------- */
+const INQ_PER_IP_HOUR = 5; // 한 사람(같은 IP)이 1시간에 보낼 수 있는 건수
+const INQ_ALL_DAY = 200; // 사이트 전체 하루 상한(자동 스팸 대량 접수 방지)
+/**
+ * site.js가 보내는 상담 신청(x-www-form-urlencoded, form-name=contact-form)을 저장한다.
+ * - 숨은 칸(website)을 채운 요청은 봇으로 보고 저장하지 않되 성공처럼 응답(봇이 우회 방법을 알지 못하게)
+ * - 다른 사이트에서 보낸 요청(Origin 불일치)은 거부
+ */
+export async function handleInquiry(req, env) {
+  const db = env.DB;
+  await ensure(db);
+  const url = new URL(req.url);
+  const o = req.headers.get('Origin');
+  if (o && o !== url.origin) return json({ error: '허용되지 않은 요청입니다.' }, 403);
+  if (!(req.headers.get('content-type') || '').startsWith('application/x-www-form-urlencoded')) return json({ error: '잘못된 요청입니다.' }, 400);
+  const raw = await req.text();
+  if (raw.length > 20000) return json({ error: '내용이 너무 깁니다.' }, 413);
+  const f = new URLSearchParams(raw);
+  if (f.get('form-name') !== 'contact-form') return json({ error: '잘못된 요청입니다.' }, 400);
+  if (f.get('website')) return json({ ok: true });
+  const clean = (k, n) => String(f.get(k) || '').replace(/\r\n?/g, '\n').trim().slice(0, n);
+  const p = { topic: clean('topic', 40), name: clean('name', 40), phone: clean('phone', 30), message: clean('message', 3000), source: clean('source', 30) };
+  if (!p.name || !p.message) return json({ error: '이름과 상담 내용을 입력해 주세요.' }, 400);
+  const nd = p.phone.replace(/\D/g, '').length;
+  if (nd < 9 || nd > 13 || /[^\d\s()+-]/.test(p.phone)) return json({ error: '연락처를 확인해 주세요.' }, 400);
+  if (f.get('agree') !== '동의') return json({ error: '개인정보 수집·이용에 동의해 주세요.' }, 400);
+  const ipHash = (await hmac(db, 'inquiry:' + clientIP(req))).slice(0, 32);
+  const hourAgo = new Date(Date.now() - 3600e3).toISOString();
+  const dayAgo = new Date(Date.now() - 86400e3).toISOString();
+  const mine = (await db.prepare('SELECT COUNT(*) c FROM inquiries WHERE ip_hash=? AND created_at>?').bind(ipHash, hourAgo).first()).c;
+  const all = (await db.prepare('SELECT COUNT(*) c FROM inquiries WHERE created_at>?').bind(dayAgo).first()).c;
+  if (mine >= INQ_PER_IP_HOUR || all >= INQ_ALL_DAY) return json({ error: '잠시 후 다시 시도해 주세요.' }, 429);
+  const t = nowISO();
+  const r = await db
+    .prepare('INSERT INTO inquiries(status,topic,name,phone,message,source,ip_hash,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)')
+    .bind('new', p.topic, p.name, p.phone, p.message, p.source, ipHash, t, t)
+    .run();
+  return json({ ok: true, id: r.meta.last_row_id });
 }
 
 export async function bumpViews(db, id) {

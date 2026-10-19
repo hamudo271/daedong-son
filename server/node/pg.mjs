@@ -24,7 +24,7 @@ export function translate(sql) {
   if (/^\s*CREATE\s+TABLE/i.test(s))
     s = s.replace(/\bINTEGER PRIMARY KEY AUTOINCREMENT\b/gi, 'BIGSERIAL PRIMARY KEY').replace(/\bINTEGER\b/g, 'BIGINT').replace(/\bBLOB\b/g, 'BYTEA');
   s = s.replace(/\bLIKE\b/g, 'ILIKE'); // SQLite LIKE는 대소문자 구분 없음
-  if (/^\s*INSERT\s+INTO\s+(posts|media)\b/i.test(s) && !/\bRETURNING\b/i.test(s)) s += ' RETURNING id';
+  if (/^\s*INSERT\s+INTO\s+(posts|media|inquiries)\b/i.test(s) && !/\bRETURNING\b/i.test(s)) s += ' RETURNING id';
   let i = 0;
   return s.replace(/\?/g, () => '$' + ++i);
 }
