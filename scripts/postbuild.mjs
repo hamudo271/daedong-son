@@ -39,8 +39,8 @@ function seo(html, slug) {
     `<link rel="apple-touch-icon" href="/apple-touch-icon.png">`,
     `<link rel="alternate" type="application/rss+xml" title="${SITE.name} 손해사정 사례·매거진·뉴스룸" href="${ORIGIN}/rss.xml">`,
     // 검색 등록 소유 확인(구글 서치 콘솔·네이버 서치어드바이저)
-    `<meta name="google-site-verification" content="gZmtUUN-n1NpqwYHF2pL866rKXDnmNKxxj37oAp8d-U">`,
-    `<meta name="naver-site-verification" content="e61cb98d7c864248e465054d18147776ec0a08ad">`,
+    `<meta name="google-site-verification" content="XDiTZKmnscstVzx0WIlNGaFnptw8jpLbXvZWcoyUvx8">`,
+    `<meta name="naver-site-verification" content="d464854929cb8d39b5715cf1f5d4588f09bcec5e">`,
   ];
   if (slug === 'home' || slug === 'contact') head.push(ldScript(orgLD(ORIGIN)));
   if (!h.includes('</head>')) throw new Error('no </head> in ' + slug);
