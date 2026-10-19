@@ -1,6 +1,6 @@
 /** Cloudflare Pages Functions: 기존 D1 CMS를 Next 정적 산출물에 결합한다. */
-import { handleApi, serveMedia, listPublic, getPublic, isAdmin, bumpViews, plain, esc } from '../server/core.js';
-import { SITE, TYPES } from '../lib/site.js';
+import { handleApi, serveMedia, listPublic, getPublic, isAdmin, bumpViews, plain, esc, ensure } from '../server/core.js';
+import { SITE, TYPES, ldScript } from '../lib/site.js';
 import { caseTrackHTML, caseListHTML, caseViewHTML, postViewHTML, caseNotFoundHTML } from '../server/render.jsx';
 
 const TYPE_BY_PATH = { '/cases': 'case', '/cases/magazine': 'magazine', '/cases/news': 'tip' };
@@ -15,20 +15,31 @@ async function asset(env, origin, path) {
   }
   return res;
 }
-async function render(env, url, shellPath, { root = '#cms-root', html, status = 200, meta = null, swap = {} }) {
+/**
+ * 틀(정적 HTML)에 CMS 내용을 끼워 넣는다.
+ * h1ToP: 글 상세는 글 제목이 h1이 되도록 틀의 메뉴 제목(h1.sub-title)을 p로 바꾼다(모양은 클래스로 같음)
+ * noindex: 관리자 미리보기·빈 목록은 검색에 올리지 않는다
+ */
+async function render(env, url, shellPath, { root = '#cms-root', html, status = 200, meta = null, swap = {}, h1ToP = false, noindex = false }) {
   const base = await asset(env, url.origin, shellPath);
   let rw = new HTMLRewriter().on(root, { element: (el) => el.setInnerContent(html, { html: true }) });
   for (const [sel, h] of Object.entries(swap)) rw = rw.on(sel, { element: (el) => el.setInnerContent(h, { html: true }) });
+  if (h1ToP) rw = rw.on('h1.sub-title', { element: (el) => { el.tagName = 'p'; } });
+  if (noindex) rw = rw.on('head', { element: (el) => el.append('<meta name="robots" content="noindex">', { html: true }) });
   if (meta) {
+    // 대표 주소는 항상 SITE.url 기준(Railway 기본 주소·미리보기 주소로 들어와도 같은 canonical)
+    const canon = SITE.url + url.pathname;
     rw = rw
       .on('title', { element: (el) => el.setInnerContent(meta.title) })
       .on('meta[name="description"]', { element: (el) => el.setAttribute('content', meta.desc) })
       .on('meta[property="og:title"]', { element: (el) => el.setAttribute('content', meta.title) })
       .on('meta[property="og:description"]', { element: (el) => el.setAttribute('content', meta.desc) })
       .on('meta[property="og:image"]', { element: (el) => meta.image && el.setAttribute('content', meta.image) })
+      .on('meta[property="og:type"]', { element: (el) => meta.type && el.setAttribute('content', meta.type) })
+      .on('meta[property="og:url"]', { element: (el) => el.setAttribute('content', canon) })
+      .on('link[rel="canonical"]', { element: (el) => el.setAttribute('href', canon) })
       .on('head', { element(el) {
-        el.append('<link rel="canonical" href="' + esc(url.origin + url.pathname) + '">', { html: true });
-        if (meta.ld) el.append('<script type="application/ld+json">' + JSON.stringify(meta.ld).replace(/</g, '\\u003c') + '</script>', { html: true });
+        for (const o of [].concat(meta.ld || [])) el.append(ldScript(o), { html: true });
       }});
   }
   const out = rw.transform(base);
@@ -56,6 +67,8 @@ async function route(ctx, url, p) {
     const [d, counts] = await Promise.all([listPublic(db, kind, { page, cat, per: 12 }), typeCounts(db)]);
     const opt = { html: caseListHTML(d, cat, kind, counts), swap: { '.sub-lead': t.lead, '.xbox-p': t.xbox } };
     if (kind !== 'case') opt.meta = { title: t.label + ' | 손해사정 사례 | ' + SITE.name, desc: t.desc };
+    // 글이 하나도 없는 매거진·뉴스룸 목록은 빈 페이지라 검색에 올리지 않는다
+    if (!d.total) opt.noindex = true;
     return render(env, url, '/cases', opt);
   }
   const m = p.match(/^\/cases\/(\d+)$/);
@@ -68,22 +81,56 @@ async function route(ctx, url, p) {
   if (r.post.status === 'published' && !preview) ctx.waitUntil(bumpViews(db, r.post.id));
   const q = r.post;
   const t = TYPES[k];
+  const canon = SITE.url + url.pathname;
+  const cover = q.cover_id ? SITE.url + '/media/' + q.cover_id : null;
+  const desc = (q.summary || plain(q.body)).slice(0, 150);
   return render(env, url, '/cases-view.html', {
     html: k === 'case' ? caseViewHTML(r, preview) : postViewHTML(r, preview),
     swap: { '.sub-lead': t.lead },
+    h1ToP: true,
+    noindex: preview,
     meta: {
       title: q.title + ' | ' + t.label + ' | ' + SITE.name,
-      desc: (q.summary || plain(q.body)).slice(0, 150),
-      image: q.cover_id ? url.origin + '/media/' + q.cover_id : null,
-      ld: {
-        '@context': 'https://schema.org', '@type': 'Article', headline: q.title,
-        datePublished: q.published_at, dateModified: (q.updated_at || '').slice(0, 10),
-        publisher: { '@type': 'ProfessionalService', name: SITE.name },
-        image: q.cover_id ? [url.origin + '/media/' + q.cover_id] : undefined,
-        mainEntityOfPage: url.origin + url.pathname,
-      },
+      desc,
+      image: cover,
+      type: 'article',
+      ld: [
+        {
+          '@context': 'https://schema.org', '@type': 'Article', headline: q.title.slice(0, 110), description: desc,
+          datePublished: q.published_at, dateModified: (q.updated_at || q.published_at || '').slice(0, 10),
+          image: [cover || SITE.url + '/assets/img/og-default.jpg'],
+          author: q.author && q.author !== SITE.name ? { '@type': 'Person', name: q.author } : { '@type': 'Organization', name: SITE.name, url: SITE.url + '/' },
+          publisher: { '@type': 'Organization', name: SITE.name, logo: { '@type': 'ImageObject', url: SITE.url + '/assets/img/logo-512.png' } },
+          mainEntityOfPage: canon,
+        },
+        {
+          '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: '홈', item: SITE.url + '/' },
+            { '@type': 'ListItem', position: 2, name: t.label, item: SITE.url + t.href },
+            { '@type': 'ListItem', position: 3, name: q.title, item: canon },
+          ],
+        },
+      ],
     },
   });
+}
+
+/** 검색엔진용 sitemap.xml: 고정 페이지 + 공개된 사례·매거진·뉴스룸 글 */
+async function sitemap(db) {
+  await ensure(db);
+  const rows = (await db.prepare("SELECT id, kind, published_at, updated_at FROM posts WHERE status='published' ORDER BY id").all()).results.filter((r) => TYPES[r.kind]);
+  const day = (r) => (r.updated_at || r.published_at || '').slice(0, 10);
+  const newest = (kind) => rows.filter((r) => !kind || r.kind === kind).map(day).sort().pop();
+  const urls = [['/', newest()], ['/about'], ['/services'], ['/partners'], ['/contact'], ['/cases', newest('case')]];
+  if (newest('magazine')) urls.push(['/cases/magazine', newest('magazine')]);
+  if (newest('tip')) urls.push(['/cases/news', newest('tip')]);
+  for (const r of rows) urls.push(['/cases/' + r.id, day(r)]);
+  const xml =
+    '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+    urls.map(([u, m]) => `  <url><loc>${esc(SITE.url + u)}</loc>${m ? `<lastmod>${m}</lastmod>` : ''}</url>`).join('\n') +
+    '\n</urlset>\n';
+  return new Response(xml, { headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
 }
 
 export async function onRequest(ctx) {
@@ -95,6 +142,7 @@ export async function onRequest(ctx) {
   if (media) return serveMedia(env, +media[1]);
   if (request.method !== 'GET' && request.method !== 'HEAD') return ctx.next();
   try {
+    if (p === '/sitemap.xml') return await sitemap(env.DB);
     const res = await route(ctx, url, p);
     if (res) return res;
   } catch (e) {

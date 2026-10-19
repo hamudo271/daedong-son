@@ -207,7 +207,7 @@ export function PostView({ v: { post: p, newer, older }, preview }) {
       <a className="cv-back" href={t.href}><IconArrowL /><span>{t.label} 목록</span></a>
       <header className="cv-head" data-rv="">
         <div className="case-head case-head--l"><span className="case-no">{t.badge}</span>{p.category ? <span className="case-tag">{p.category}</span> : null}</div>
-        <h2 className="cv-title">{p.title}</h2>
+        <h1 className="cv-title">{p.title}</h1>
         <p className="cv-meta"><time dateTime={p.published_at || ''}>{dot(p.published_at)}</time>{p.author ? <span>{p.author}</span> : null}<span>조회 {p.views + (preview ? 0 : 1)}</span></p>
       </header>
       {sum ? <p className="cv-sum" data-rv="">{sum}</p> : null}
@@ -232,7 +232,7 @@ export function CaseView({ v: { post: p, index, newer, older }, preview }) {
       <a className="cv-back" href="/cases"><IconArrowL /><span>손해사정 사례 목록</span></a>
       <header className="cv-head" data-rv="">
         <div className="case-head case-head--l">{no ? <span className="case-no">CASE {pad(no)}</span> : null}{p.category ? <span className="case-tag">{p.category}</span> : null}</div>
-        <h2 className="cv-title">{p.title}</h2>
+        <h1 className="cv-title">{p.title}</h1>
         <p className="cv-meta"><time dateTime={p.published_at || ''}>{dot(p.published_at)}</time><span>조회 {p.views + (preview ? 0 : 1)}</span></p>
       </header>
       <div className="cv-result" data-rv="">

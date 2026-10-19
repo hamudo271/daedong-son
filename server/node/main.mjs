@@ -15,6 +15,7 @@ import { openPg } from './pg.mjs';
 import { createStatic, pattern } from './static.mjs';
 import { ensure } from '../core.js';
 import { onRequest } from '../../functions/[[path]].js';
+import { SITE } from '../../lib/site.js';
 
 globalThis.HTMLRewriter = HTMLRewriter;
 
@@ -119,6 +120,7 @@ async function send(req, res, response) {
   headers['referrer-policy'] ??= 'strict-origin-when-cross-origin';
   headers['x-frame-options'] ??= locked ? 'DENY' : 'SAMEORIGIN';
   if (locked) headers['content-security-policy'] ??= "frame-ancestors 'none'";
+  if (locked) headers['x-robots-tag'] ??= 'noindex, nofollow';
   if (String(req.headers['x-forwarded-proto'] || '').startsWith('https')) headers['strict-transport-security'] ??= 'max-age=15552000';
   let body = req.method === 'HEAD' || !response.body ? null : Buffer.from(await response.arrayBuffer());
   const accept = String(req.headers['accept-encoding'] || '');
@@ -138,7 +140,19 @@ async function send(req, res, response) {
   res.end(body);
 }
 
+// 대표 주소는 하나만: Railway 기본 주소(*.up.railway.app)·www로 들어오면 daedongclaim.com으로 보낸다.
+// 검색 중복을 막고, Cloudflare를 거치지 않고 서버로 바로 들어오는 길(관리자 로그인 포함)도 닫는다.
+// Railway 상태 확인(healthcheck.railway.app)·로컬 주소는 그대로 둔다.
+const PRIMARY = new URL(process.env.SITE_URL || SITE.url);
+const otherHost = (host) => host !== PRIMARY.hostname && (host.endsWith('.up.railway.app') || host === 'www.' + PRIMARY.hostname);
+
 const server = http.createServer((req, res) => {
+  const host = String(req.headers.host || '').toLowerCase().replace(/:\d+$/, '');
+  if (otherHost(host)) {
+    const safe = req.method === 'GET' || req.method === 'HEAD';
+    res.writeHead(safe ? 301 : 308, { location: PRIMARY.origin + req.url, 'cache-control': 'public, max-age=3600' });
+    return res.end();
+  }
   const chunks = [];
   let size = 0;
   req.on('data', (c) => {
