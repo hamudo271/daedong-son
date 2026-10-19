@@ -770,6 +770,8 @@ html.fp-on .flt { display: none; }
   .ct-prof { grid-template-columns: 110px 1fr; gap: 16px; padding: 20px 18px 0 16px; }
   .ct-prof-txt b { font-size: 18px; }
   .ct-tel { font-size: 19px; }
+  .ct-note { margin-top: 24px; padding: 18px 18px 20px; border-radius: 18px; }
+  .ct-sec .ct-lead { font-size: 16px; }
   .chip span { height: 38px; padding: 0 13px; font-size: 13.5px; }
 }
 
@@ -942,9 +944,20 @@ html.fp-on .case--slide .case-link { padding-top: 14px; }
 @media (max-width: 1023px) { .reg-grid { grid-template-columns: 1fr; } }
 
 /* 상담 문의: 문의 전 안내 */
-.ct-note { margin-top: 26px; padding: 20px 22px; border-radius: 16px; background: #fff; border-left: 4px solid var(--bronze); font-size: 14.5px; line-height: 1.75; color: var(--ink2); box-shadow: 0 18px 40px -34px rgba(15,34,48,.35); }
-.ct-note b { display: block; margin-bottom: 6px; font-size: 15px; color: var(--ink); }
-.ct-note p + p { margin-top: 6px; }
+/* 상담 신청 소개 — 안내 카드는 왼쪽 띠 대신 얇은 테두리·아이콘 머리글로 */
+.ct-sec .ct-l h2 { margin-top: 14px; text-wrap: balance; }
+.ct-sec .ct-lead { margin-top: 20px; max-width: 34em; font-size: 17px; line-height: 1.75; text-wrap: pretty; }
+.ct-lead strong { font-weight: 750; color: var(--bronze-d); }
+.ct-note { margin-top: 30px; padding: 22px 24px 24px; border-radius: 20px; background: #fff; border: 1px solid var(--line); font-size: 14.5px; line-height: 1.8; color: var(--ink2); box-shadow: 0 16px 36px -28px rgba(15,34,48,.35), 0 1px 2px rgba(15,34,48,.04); }
+.ct-note-h { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+.ct-note-h i { flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--navy); color: var(--gold); display: grid; place-items: center; }
+.ct-note-h svg { font-size: 17px; }
+.ct-note-h b { font-size: 16px; font-weight: 750; letter-spacing: -.02em; color: var(--ink); }
+.ct-note p { text-wrap: pretty; }
+.ct-note p + p { margin-top: 10px; }
+.ct-note em { font-style: normal; font-weight: 700; color: var(--ink); }
+.ct-note-lim { position: relative; padding-left: 16px; color: var(--mute); }
+.ct-note-lim::before { content: ''; position: absolute; left: 0; top: .55em; width: 7px; height: 7px; border-radius: 50%; background: var(--bronze-l); }
 
 /* 협력사 */
 .pt-wrap { padding: clamp(90px, 10vw, 150px) 0; }
